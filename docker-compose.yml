@@ -1,6 +1,6 @@
 services:
   web:
-    image: distucker/spring-petclinic:55d2e9ec419e569d98d1e528bf05ea2b8179f55e
+    image: distucker/spring-petclinic:ed1352ba3f7ce1f472984a8444553f7587da6835
     environment:
       SPRING_PROFILES_ACTIVE: postgres
       POSTGRES_URL: jdbc:postgresql://postgres:5432/petclinic # Database URL
