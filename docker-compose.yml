@@ -1,0 +1,49 @@
+services:
+  web:
+    image: distucker/spring-petclinic:f48b46d15ff588b6f2fbaa6906fb9ffb70187dcf
+    environment:
+      SPRING_PROFILES_ACTIVE: postgres
+      POSTGRES_URL: jdbc:postgresql://postgres:5432/petclinic # Database URL
+      POSTGRES_USER: petclinic
+      POSTGRES_PASS: petclinic
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+    restart: always # Automatically restart if it fails
+    # healthcheck: # Optional: Check if the application is up
+    #  test: ["CMD-SHELL", "curl -f http://${HOSTNAME}:8080/actuator/health || exit 1"]
+    #  interval: 60s
+    #  timeout: 30s
+    #  retries: 5
+    deploy:
+      replicas: 3 # Number of replicas for Swarm mode
+      update_config:
+        parallelism: 1
+        delay: 10s
+      restart_policy:
+        condition: any
+
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: petclinic
+      POSTGRES_USER: petclinic
+      POSTGRES_PASSWORD: petclinic
+    ports:
+      - "5432"
+    restart: always # Automatically restart if it fails
+    healthcheck: # Check if PostgreSQL is ready
+      test: ["CMD-SHELL", "pg_isready -U petclinic"]
+      interval: 30s
+      timeout: 15s
+      retries: 10
+    deploy:
+      replicas: 2 # Specify 1 replica for PostgreSQL
+      restart_policy:
+        condition: any
+    volumes:
+      - db_data:/var/lib/postgresql/data # Persistent storage
+
+volumes:
+  db_data:
