@@ -1,0 +1,64 @@
+services:
+  # Prometheus Service
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+
+
+  # Grafana Service
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+
+    depends_on:
+      - prometheus
+      - loki
+
+  # Loki Service
+  loki:
+    image: grafana/loki:latest
+    ports:
+      - "3100:3100"
+
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - ./loki/loki-config.yaml:/etc/loki/local-config.yaml
+
+  # Promtail Service (Log Shipper)
+  promtail:
+    image: grafana/promtail:latest
+    volumes:
+      - /var/log:/var/log
+      - ./promtail/promtail-config.yaml:/etc/promtail/config.yml
+
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+
+  # NGINX Exporter for Prometheus
+  nginx-exporter:
+    image: nginx/nginx-prometheus-exporter:latest
+    ports:
+      - "9113:9113"
+    environment:
+      - NGINX_HOST=http://localhost:80
+
+
+  # PostgreSQL Exporter for Prometheus
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    environment:
+      DATA_SOURCE_NAME: /run/secrets/db_constring
+    secrets:
+      - db_constring
+
+    ports:
+      - "9187:9187"
+
+secrets:
+  db_constring:
+    external: true

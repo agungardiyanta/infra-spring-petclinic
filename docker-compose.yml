@@ -3,21 +3,19 @@ services:
     image: distucker/spring-petclinic:16e333e0c04918b2142d7cf21e545012cd6d733d
     environment:
       SPRING_PROFILES_ACTIVE: postgres
-      POSTGRES_URL: jdbc:postgresql://postgres:5432/petclinic # Database URL
-      POSTGRES_USER: petclinic
-      POSTGRES_PASS: petclinic
+      POSTGRES_URL: jdbc:postgresql://postgres:5432/petclinic 
+      POSTGRES_USER_FILE: /run/secrets/db_username  
+      POSTGRES_PASS_FILE: /run/secrets/db_password  
+    secrets:
+      - db_username
+      - db_password
     ports:
       - "8080:8080"
     depends_on:
       - postgres
-    restart: always # Automatically restart if it fails
-    # healthcheck: # Optional: Check if the application is up
-    #  test: ["CMD-SHELL", "curl -f http://${HOSTNAME}:8080/actuator/health || exit 1"]
-    #  interval: 60s
-    #  timeout: 30s
-    #  retries: 5
+    restart: always 
     deploy:
-      replicas: 3 # Number of replicas for Swarm mode
+      replicas: 3 
       update_config:
         parallelism: 1
         delay: 10s
@@ -28,8 +26,11 @@ services:
     image: postgres:17
     environment:
       POSTGRES_DB: petclinic
-      POSTGRES_USER: petclinic
-      POSTGRES_PASSWORD: petclinic
+      POSTGRES_USER_FILE: /run/secrets/db_username  
+      POSTGRES_PASS_FILE: /run/secrets/db_password  
+    secrets:
+      - db_username
+      - db_password
     ports:
       - "5432"
     restart: always # Automatically restart if it fails
@@ -47,3 +48,8 @@ services:
 
 volumes:
   db_data:
+secrets:
+  db_username:
+    external: true
+  db_password:
+    external: true
