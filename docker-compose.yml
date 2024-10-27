@@ -21,7 +21,7 @@ services:
         delay: 10s
       restart_policy:
         condition: any
-
+    
   postgres:
     image: postgres:17
     environment:
@@ -32,7 +32,7 @@ services:
       - db_username
       - db_password
     ports:
-      - "5432"
+      - "5432:5432"
     restart: always # Automatically restart if it fails
     healthcheck: # Check if PostgreSQL is ready
       test: ["CMD-SHELL", "pg_isready -U petclinic"]
@@ -45,7 +45,6 @@ services:
         condition: any
     volumes:
       - db_data:/var/lib/postgresql/data # Persistent storage
-
 volumes:
   db_data:
 secrets:

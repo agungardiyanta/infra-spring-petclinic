@@ -1,64 +1,140 @@
+version: "3"
+
+networks:
+  monitor-net:
+    driver: bridge
+
+volumes:
+    prometheus_data: {}
+    grafana_data: {}
+
 services:
-  # Prometheus Service
+
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v2.38.0
+    container_name: prometheus
     volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
-    ports:
-      - "9090:9090"
+      - ./prometheus:/etc/prometheus
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    restart: always
+    expose:
+      - 9090
+    networks:
+      - monitor-net
+    labels:
+      org.label-schema.group: "monitoring"
 
+  alertmanager:
+    image: prom/alertmanager:v0.24.0
+    container_name: alertmanager
+    volumes:
+      - ./alertmanager:/etc/alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/config.yml'
+      - '--storage.path=/alertmanager'
+    restart: always
+    expose:
+      - 9093
+    networks:
+      - monitor-net
+    labels:
+      org.label-schema.group: "monitoring"
 
-  # Grafana Service
+  nodeexporter:
+    image: prom/node-exporter:v1.3.1
+    container_name: nodeexporter
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    restart: always
+    expose:
+      - 9100
+    networks:
+      - monitor-net
+    labels:
+      org.label-schema.group: "monitoring"
+
+  loki:
+    image: grafana/loki:2.6.0
+    container_name: loki
+    volumes:
+      - ./loki/loki-config.yaml:/etc/loki/loki-config.yaml
+    command: -config.file=/etc/loki/loki-config.yaml
+    expose:
+      - 3100
+    restart: always
+    networks:
+      - monitor-net
+
+  promtail:
+    image: grafana/promtail:2.6.0
+    container_name: promtail
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/log:/var/log:ro
+      - ./loki/promtail-config.yaml:/etc/promtail/promtail-config.yaml
+    command: -config.file=/etc/promtail/promtail-config.yaml
+    restart: always
+    networks:
+      - monitor-net
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.45.0
+    container_name: cadvisor
+    privileged: true
+    devices:
+      - /dev/kmsg:/dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      #- /cgroup:/cgroup:ro #doesn't work on MacOS only for Linux
+    restart: always
+    expose:
+      - 8000
+    networks:
+      - monitor-net
+    labels:
+      org.label-schema.group: "monitoring"
+
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:9.1.1
+    container_name: grafana
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
+    env_file:
+      - config
+    restart: always
     ports:
       - "3000:3000"
+    networks:
+      - monitor-net
+    labels:
+      org.label-schema.group: "monitoring"
 
-    depends_on:
-      - prometheus
-      - loki
-
-  # Loki Service
-  loki:
-    image: grafana/loki:latest
-    ports:
-      - "3100:3100"
-
-    command: -config.file=/etc/loki/local-config.yaml
-    volumes:
-      - ./loki/loki-config.yaml:/etc/loki/local-config.yaml
-
-  # Promtail Service (Log Shipper)
-  promtail:
-    image: grafana/promtail:latest
-    volumes:
-      - /var/log:/var/log
-      - ./promtail/promtail-config.yaml:/etc/promtail/config.yml
-
-    command: -config.file=/etc/promtail/config.yml
-    depends_on:
-      - loki
-
-  # NGINX Exporter for Prometheus
-  nginx-exporter:
-    image: nginx/nginx-prometheus-exporter:latest
-    ports:
-      - "9113:9113"
-    environment:
-      - NGINX_HOST=http://localhost:80
-
-
-  # PostgreSQL Exporter for Prometheus
-  postgres-exporter:
-    image: prometheuscommunity/postgres-exporter:latest
-    environment:
-      DATA_SOURCE_NAME: /run/secrets/db_constring
-    secrets:
-      - db_constring
-
-    ports:
-      - "9187:9187"
-
-secrets:
-  db_constring:
-    external: true
+  pushgateway:
+    image: prom/pushgateway:v1.4.3
+    container_name: pushgateway
+    restart: always
+    expose:
+      - 9091
+    networks:
+      - monitor-net
+    labels:
+      org.label-schema.group: "monitoring"
