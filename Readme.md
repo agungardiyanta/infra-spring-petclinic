@@ -48,9 +48,8 @@ application and database deploy as service with stack name petclinic. The web se
 On this project I use grafana, prometheus, loki stack to provide metrics and logging also few service that support it.
 
 I use template from this repository [dolomo](https://github.com/ductnn/domolo)
-with few changes that can show in [monitoring.yml](monitoring.yml)
-
-to deploy it I used 
+with few changes that can show in [monitoring.yml](monitoring.yml),
+deploy command
 ```
 docker compose up -d
 ```
@@ -61,3 +60,14 @@ This application accessible from internet with domain [divewater.xyz](https://di
 
 The app use certbot for ssl certification configuration with wildcard subdomain
 the NGINX full config can see inside [conf divewater.xyz](nginx.conf)
+
+```
+# Access the vm via ssh
+# create  config file and copy our nginx conf
+sudo vi /etc/nginx/site-available/divewater.xyz
+# create symlink
+sudo ln -s /etc/nginx/sites-available/divewater.xyz/etc/nginx/sites-enabled/
+sudo nginx -t
+sudo nginx -s reload 
+
+```
