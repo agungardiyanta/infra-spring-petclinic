@@ -1,0 +1,79 @@
+name: "Build and Push"
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        java: [ '17' ]
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Set up JDK ${{ matrix.java }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ matrix.java }}
+          distribution: 'adopt'
+          cache: maven
+
+      - name: Build image with Maven
+        run: ./mvnw spring-boot:build-image -Dspring-boot.build-image.imageName=distucker/spring-petclinic:${{ github.sha }}
+
+      - name: Push Image to Docker Hub
+        run: |
+          docker push distucker/spring-petclinic:${{ github.sha }}
+
+      - name: checkout infra repository
+        uses: actions/checkout@v4
+        with:
+          repository: agungardiyanta/infra-spring-petclinic
+          token: ${{ secrets.GIT_TOKEN }}
+          ref: main
+
+      - name: Modify docker-compose file and SCP to VM
+        run: |
+          git config user.email ${{ secrets.email }}
+          git config user.name ${{ secrets.name }}
+          git pull origin
+          echo “Working Directory: $(pwd)”
+
+          # Print values.yaml for debugging before changes
+          echo “Before modification:”
+          cat docker-compose.yml
+
+          # Use sed to update the image tag in docker-compose
+          sed -i "s|image: distucker/spring-petclinic:.*|image: distucker/spring-petclinic:${{ github.sha }}|" "docker-compose.yml"
+
+
+          # Print values.yaml for debugging after changes
+          echo “After modification:”
+          cat docker-compose.yml
+          # push the update
+          git add docker-compose.yml
+          git commit -m "Update image tag by Github Actions Job change manifest"
+          git push origin main
+
+          # Copy the updated docker-compose file
+          echo "${{ secrets.VM_SSH_KEY }}" > ssh_key.pem
+          chmod 600 ssh_key.pem
+          scp -i ssh_key.pem -o StrictHostKeyChecking=no docker-compose.yml ${{ secrets.VM_USERNAME }}@${{ secrets.VM_HOST }}:docker-compose.yml
+
+      - name: SSH into VM and Deploy Stack
+        run: |
+          echo "${{ secrets.VM_SSH_KEY }}" > ssh_key.pem
+          chmod 600 ssh_key.pem
+
+          ssh -i ssh_key.pem -o StrictHostKeyChecking=no ${{secrets.VM_USERNAME}}@${{secrets.VM_HOST}} << EOF
+            docker stack deploy --compose-file docker-compose.yml petclinic
+          EOF
